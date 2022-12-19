@@ -1,7 +1,6 @@
 import random
 
 from confing import bot, dp
-from random import choice
 from aiogram import types, Dispatcher
 
 
