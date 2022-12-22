@@ -2,8 +2,9 @@ from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher.filters.state import State, StatesGroup
-from confing import bot
-from keyboards import client_kb
+from database.bot_db import sql_command_insert
+from confing import bot, ADMINS
+
 
 
 class FSMAdmin(StatesGroup):
@@ -16,80 +17,97 @@ class FSMAdmin(StatesGroup):
 
 
 async def fsm_start(message: types.Message):
-    if message.chat.type == 'private':
-        await FSMAdmin.name.set()
-        await message.answer("id?", reply_markup=client_kb.cancel_markup)
+    if message.chat.type == 'private' and message.from_user.id in ADMINS:
+        await FSMAdmin.id.set()
+        await message.answer(f"Здраствуй {message.from_user.full_name}")
+        await message.answer("id ментора")
+    elif message.from_user.id not in ADMINS:
+        await message.answer("ТЫ НЕ КУРАТОР!!!")
     else:
-        await message.answer("Пиши  в личке ")
+        await message.answer('Пиши в личку!')
 
 
 async def load_id(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data['id'] = int(message.text)
-    await FSMAdmin.next()
-    await message.answer("Как зовут?", reply_markup=client_kb.cancel_markup)
+    try:
+        async with state.proxy() as data:
+            data['id'] = int(message.text)
+
+            await FSMAdmin.next()
+            await message.answer("Как зовут?")
+
+    except:
+        await bot.send_message(message.from_user.id, "id состоит только из цифр")
 
 
 async def load_name(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['name'] = message.text
     await FSMAdmin.next()
-    await message.answer("какое напровления")
+    await bot.send_message(message.from_user.id, "Какое направление?")
 
 
 async def load_direction(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['direction'] = message.text
     await FSMAdmin.next()
-    await message.answer("сколько лет", reply_markup=client_kb.cancel_markup)
+    await message.answer("Возраст")
 
 
 async def load_age(message: types.Message, state: FSMContext):
-    if not message.text.isdigit():
-        await message.answer("Пиши числа")
-    elif int(message.text) < 5 or int(message.text) > 50:
-        await message.answer("Возростное ограничение!")
-    else:
-        async with state.proxy() as data:
-            data['age'] = int(message.text)
-        await FSMAdmin.next()
-        await message.answer("группа какое?")
+    try:
+        if 50 > int(message.text) > 12:
+            async with state.proxy() as data:
+                data['age'] = int(message.text)
+            await FSMAdmin.next()
+            await message.answer("Из какой группы?")
+        else:
+            await message.answer("возраст не подходит")
+    except:
+        await message.answer("Вводи только числа!")
 
 
 async def load_group(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['group'] = message.text
+        await bot.send_message(message.from_user.id, f"id - {data['id']},\n"
+                                                     f"имя - {data['name']},\nнаправление - {data['direction']},\nвозраст - {data['age']}, \n"
+                                                     f"группа - {data['group']}")
+
     await FSMAdmin.next()
-    await message.answer("Все ли провильно?")
+    await message.answer("Все правильно?")
 
 
 async def submit(message: types.Message, state: FSMContext):
-    if message.text.lower() == "да":
-        # Запись в БД
+    if message.text.lower() == 'да':
+        await sql_command_insert(state)
         await state.finish()
-        await message.answer("Ты зареган")
-    elif message.text.lower() == "нет":
+        await bot.send_message(message.from_user.id, "Регистрация завершена")
+    elif message.text.lower() == 'нет':
+        await state.finish()
+        await message.answer("Отмена")
+    else:
+        await message.answer('Не получилось!')
+
+
+async def cancel_reg(message: types.Message, state: FSMContext):
+    curren_state = await state.get_state()
+    if curren_state is not None:
         await state.finish()
         await message.answer("Ну и пошел ты!")
-    else:
-        await message.answer('НИПОНЯЛ!?')
-
-
-async def cancel_fsm(message: types.Message, state: FSMContext):
-    current_state = await state.get_state()
-    if current_state is not None:
-        await state.finish()
-        await message.answer("пока")
 
 
 def register_handlers_fsm_anketa(dp: Dispatcher):
-    dp.register_message_handler(cancel_fsm, state="*", commands=['cancel'])
-    dp.register_message_handler(cancel_fsm, Text(equals='cancel', ignore_case=True), state="*")
+    dp.register_message_handler(cancel_reg, state='*', commands=['cancel'])
+    dp.register_message_handler(cancel_reg, Text(equals='cancel', ignore_case=True),
+                                state='*')
 
-    dp.register_message_handler(fsm_start, commands=['reg'])
+
+
+
+    dp.register_message_handler(fsm_start, commands=['anketa'])
     dp.register_message_handler(load_id, state=FSMAdmin.id)
     dp.register_message_handler(load_name, state=FSMAdmin.name)
-    dp.register_message_handler(load_direction, state=FSMAdmin.direction)
     dp.register_message_handler(load_age, state=FSMAdmin.age)
+    dp.register_message_handler(load_direction, state=FSMAdmin.direction)
     dp.register_message_handler(load_group, state=FSMAdmin.group)
     dp.register_message_handler(submit, state=FSMAdmin.submit)
