@@ -1,6 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram import Bot, Dispatcher, types
 from confing import bot, dp
+from parser.films import parser
 
 #@dp.message_handler(commands=['start'])
 async def start_handler(message: types.Message):
@@ -40,7 +41,21 @@ async def mem_handler(message: types.Message):
     photo = open('mems/mem1.jfif', 'rb')
     await bot.send_photo(message.from_user.id, photo)
 
+
+async def get_ujas(message: types.Message):
+    ujas = parser()
+    for i in ujas:
+        await message.answer(
+            f"{i['link']}\n\n"
+            f"{i['title']}\n"
+            f"#Y{i['date']}\n"
+            f"#{i['country']}\n"
+            f"#{i['genre']}\n"
+        )
+
+
 def regiter_handler_client(dp: Dispatcher):
     dp.register_message_handler(start_handler,commands=['start'])
     dp.register_message_handler(quiz_1,commands=['quiz'])
     dp.register_message_handler(mem_handler,commands=['mem'])
+    dp.register_message_handler(get_ujas,commands=['films'])
